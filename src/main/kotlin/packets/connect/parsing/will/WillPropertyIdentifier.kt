@@ -1,4 +1,4 @@
-package de.jkamue.packets
+package de.jkamue.packets.connect.parsing.will
 
 enum class WillPropertyIdentifier(val identifier: Int) {
     WILL_DELAY_INTERVAL(24),

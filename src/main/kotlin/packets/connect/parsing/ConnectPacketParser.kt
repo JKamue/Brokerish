@@ -1,18 +1,20 @@
-package de.jkamue.packets
+package de.jkamue.packets.connect.parsing
 
 import de.jkamue.MalformedPacketMqttException
-import de.jkamue.packets.ConnectPropertyIdentifier.*
-import de.jkamue.packets.WillPropertyIdentifier.*
+import de.jkamue.packets.MQTTByteBuffer
+import de.jkamue.packets.WillProperties
+import de.jkamue.packets.connect.parsing.ConnectPropertyIdentifier.*
+import de.jkamue.packets.connect.parsing.will.WillPropertyParser
 import java.nio.ByteBuffer
 
 class ConnectPacketParser(
     bytes: ByteArray
 ) {
-    private val buffer = MQTTByteBuffer.wrap(bytes)
+    private val buffer = MQTTByteBuffer.Companion.wrap(bytes)
 
     fun parseConnectPacket() {
         val protocolName = buffer.getEncodedString()
-        val procolVersion = buffer.getUnsignedByte()
+        val protocolVersion = buffer.getUnsignedByte()
 
         val connectFlags = buffer.getUnsignedByte()
         val userNameFlag = connectFlags and 0b10000000 != 0
@@ -32,13 +34,13 @@ class ConnectPacketParser(
 
         val clientId = buffer.getEncodedString()
 
-        var willConfig: Map<String, String> = emptyMap()
+        var willConfig: WillProperties? = null
         var willTopic = "no topic set"
         var willPayload = "no payload set"
         if (willFlag) {
             val willLengthPropertiesLength = buffer.getVariableByteInteger()
             val willPropertiesBuffer = buffer.getNextBytesAsBuffer(willLengthPropertiesLength)
-            willConfig = parseConnectWill(willPropertiesBuffer)
+            willConfig = WillPropertyParser.parseConnectWillProperties(willPropertiesBuffer)
             willTopic = buffer.getEncodedString()
             willPayload = buffer.getEncodedString()
         }
@@ -54,62 +56,7 @@ class ConnectPacketParser(
         }
     }
 
-    fun parseConnectWill(buffer: MQTTByteBuffer): Map<String, String> {
-        val identifiers = mutableMapOf<String, String>()
-        while (buffer.remaining() > 0) {
-            val propertyIdentifier = buffer.getUnsignedByte()
 
-            if (propertyIdentifier == WILL_DELAY_INTERVAL.identifier) {
-                val willDelayInterval = buffer.getFourByteInt()
-                identifiers[WILL_DELAY_INTERVAL.name] = willDelayInterval.toString()
-                continue
-            }
-
-            if (propertyIdentifier == PAYLOAD_FORMAT_INDICATOR.identifier) {
-                val payloadFormat = buffer.getUnsignedByte()
-                identifiers[PAYLOAD_FORMAT_INDICATOR.name] = payloadFormat.toString()
-                continue
-            }
-
-            if (propertyIdentifier == MESSAGE_EXPIRY_INTERVAL.identifier) {
-                val messageExpiryInterval = buffer.getFourByteInt()
-                identifiers[MESSAGE_EXPIRY_INTERVAL.name] = messageExpiryInterval.toString()
-                continue
-            }
-
-            if (propertyIdentifier == CONTENT_TYPE.identifier) {
-                val contentType = buffer.getEncodedString()
-                identifiers[CONTENT_TYPE.name] = contentType
-                continue
-            }
-
-            if (propertyIdentifier == RESPONSE_TOPIC.identifier) {
-                val responseTopic = buffer.getEncodedString()
-                identifiers[RESPONSE_TOPIC.name] = responseTopic
-                continue
-            }
-
-            if (propertyIdentifier == CORRELATION_DATA.identifier) {
-                val correlationData = buffer.getBinaryData()
-                identifiers[CORRELATION_DATA.name] = correlationData.toCommaSeparatedInts()
-                continue
-            }
-
-            if (propertyIdentifier == WillPropertyIdentifier.USER_PROPERTY.identifier) {
-                val key = buffer.getEncodedString()
-                val value = buffer.getEncodedString()
-                val text = "$key-$value;"
-                if (!identifiers.containsKey(WillPropertyIdentifier.USER_PROPERTY.name)) {
-                    identifiers[WillPropertyIdentifier.USER_PROPERTY.name] = text
-                } else {
-                    identifiers[WillPropertyIdentifier.USER_PROPERTY.name] += text
-                }
-                continue
-            }
-        }
-
-        return identifiers
-    }
 
     fun parseConnectProperties(buffer: MQTTByteBuffer): Map<String, String> {
         val identifiers = mutableMapOf<String, String>()

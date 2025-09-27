@@ -1,4 +1,4 @@
-package de.jkamue.packets
+package de.jkamue.packets.connect.parsing
 
 enum class ConnectPropertyIdentifier(val identifier: Int) {
     SESSION_EXPIRY_INTERVAL(17),

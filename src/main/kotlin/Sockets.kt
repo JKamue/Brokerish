@@ -1,7 +1,7 @@
 package de.jkamue
 
 import de.jkamue.header.controlpacket.ControlPacketType
-import de.jkamue.packets.ConnectPacketParser
+import de.jkamue.packets.connect.parsing.ConnectPacketParser
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*

@@ -37,7 +37,7 @@ value class MQTTByteBuffer(private val buffer: ByteBuffer) {
     }
 
     fun getNextBytesAsBuffer(length: Int): MQTTByteBuffer {
-        return MQTTByteBuffer.wrap(getNextBytes(length))
+        return wrap(getNextBytes(length))
     }
 
     private fun getNextBytes(length: Int): ByteBuffer {
@@ -78,4 +78,12 @@ value class MQTTByteBuffer(private val buffer: ByteBuffer) {
     fun remaining(): Int = buffer.remaining()
 
     fun position(): Int = buffer.position()
+
+}
+
+fun ByteBuffer.createCopy(): ByteBuffer {
+    val copy = ByteArray(this.remaining())
+    val duplicate = this.duplicate()
+    duplicate.get(copy)
+    return ByteBuffer.wrap(copy).asReadOnlyBuffer()
 }
