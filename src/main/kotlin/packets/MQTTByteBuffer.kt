@@ -1,0 +1,81 @@
+package de.jkamue.packets
+
+import de.jkamue.MalformedPacketMqttException
+import java.nio.ByteBuffer
+
+@JvmInline
+value class MQTTByteBuffer(private val buffer: ByteBuffer) {
+
+    companion object {
+        fun wrap(bytes: ByteArray): MQTTByteBuffer =
+            MQTTByteBuffer(ByteBuffer.wrap(bytes).asReadOnlyBuffer())
+
+        fun wrap(buffer: ByteBuffer): MQTTByteBuffer =
+            MQTTByteBuffer(buffer.asReadOnlyBuffer())
+    }
+
+    private fun ensureRemaining(needed: Int) {
+        if (needed > buffer.remaining()) {
+            throw MalformedPacketMqttException("Expected Packet to have $needed more bytes")
+        }
+    }
+
+    fun getUnsignedByte(): Int {
+        ensureRemaining(1)
+        return buffer.get().toInt() and 0xFF
+    }
+
+    fun getTwoByteInt(): Int {
+        val msb = getUnsignedByte()
+        val lsb = getUnsignedByte()
+        return (msb shl 8) or lsb
+    }
+
+    fun getFourByteInt(): Int {
+        ensureRemaining(4)
+        return buffer.getInt()
+    }
+
+    fun getNextBytesAsBuffer(length: Int): MQTTByteBuffer {
+        return MQTTByteBuffer.wrap(getNextBytes(length))
+    }
+
+    private fun getNextBytes(length: Int): ByteBuffer {
+        ensureRemaining(length)
+        val slice = buffer.slice()
+        slice.limit(length)
+        buffer.position(buffer.position() + length)
+        return slice
+    }
+
+    fun getEncodedString(): String {
+        val length = getTwoByteInt()
+        if (length == 0) return ""
+        val bb = getNextBytes(length)
+        val arr = ByteArray(bb.remaining()) { bb.get() }
+        return String(arr, Charsets.UTF_8)
+    }
+
+    fun getVariableByteInteger(): Int {
+        var multiplier = 1
+        var value = 0
+        var bytesRead = 0
+        do {
+            val encodedByte = getUnsignedByte()
+            value += (encodedByte and 0b01111111) * multiplier
+            multiplier *= 128
+            bytesRead++
+            if (bytesRead > 4) throw MalformedPacketMqttException("Malformed Variable Byte Integer")
+        } while ((encodedByte and 0x80) != 0)
+        return value
+    }
+
+    fun getBinaryData(): ByteBuffer {
+        val length = getTwoByteInt()
+        return getNextBytes(length)
+    }
+
+    fun remaining(): Int = buffer.remaining()
+
+    fun position(): Int = buffer.position()
+}
