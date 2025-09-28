@@ -1,6 +1,6 @@
 package mqtt.parser.connect.will
 
-enum class WillPropertyIdentifier(val identifier: Int) {
+internal enum class WillPropertyIdentifier(val identifier: Int) {
     WILL_DELAY_INTERVAL(24),
     PAYLOAD_FORMAT_INDICATOR(1),
     MESSAGE_EXPIRY_INTERVAL(2),

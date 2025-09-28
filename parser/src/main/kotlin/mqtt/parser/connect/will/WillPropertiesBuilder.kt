@@ -3,7 +3,7 @@ package mqtt.parser.connect.will
 import de.jkamue.mqtt.valueobject.*
 import java.nio.ByteBuffer
 
-data class WillPropertiesBuilder(
+internal data class WillPropertiesBuilder(
     var willDelayInterval: Interval? = null,
     var payloadFormatIndicator: PayloadFormat? = null,
     var messageExpiryInterval: Interval? = null,

@@ -4,7 +4,7 @@ import de.jkamue.mqtt.packet.ConnectProperties
 import de.jkamue.mqtt.valueobject.*
 import java.nio.ByteBuffer
 
-data class ConnectPropertiesBuilder(
+internal data class ConnectPropertiesBuilder(
     var sessionExpiry: Interval? = null,
     var receiveMaximum: ReceiveMaximum? = null,
     var maximumPacketSize: MaximumPacketSize? = null,

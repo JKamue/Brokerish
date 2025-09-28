@@ -9,7 +9,7 @@ private val decoderThreadLocal = ThreadLocal.withInitial {
 }
 
 @JvmInline
-value class MQTTByteBuffer(private val buffer: ByteBuffer) {
+internal value class MQTTByteBuffer(private val buffer: ByteBuffer) {
 
     companion object {
         fun wrap(bytes: ByteArray): MQTTByteBuffer =
@@ -97,7 +97,6 @@ value class MQTTByteBuffer(private val buffer: ByteBuffer) {
     fun remaining(): Int = buffer.remaining()
 
     fun position(): Int = buffer.position()
-
 }
 
 fun ByteBuffer.createCopy(): ByteBuffer {

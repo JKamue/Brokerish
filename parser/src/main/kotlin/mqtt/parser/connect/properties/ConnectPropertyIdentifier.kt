@@ -1,6 +1,6 @@
 package mqtt.parser.connect.properties
 
-enum class ConnectPropertyIdentifier(val identifier: Int) {
+internal enum class ConnectPropertyIdentifier(val identifier: Int) {
     SESSION_EXPIRY_INTERVAL(17),
     RECEIVE_MAXIMUM(33),
     MAXIMUM_PACKET_SIZE(39),

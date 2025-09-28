@@ -6,7 +6,7 @@ import de.jkamue.mqtt.valueobject.*
 import mqtt.parser.MQTTByteBuffer
 import mqtt.parser.createCopy
 
-object WillPropertyParser {
+internal object WillPropertyParser {
 
     fun parseConnectWillProperties(buffer: MQTTByteBuffer): WillProperties {
         val builder = WillPropertiesBuilder()
