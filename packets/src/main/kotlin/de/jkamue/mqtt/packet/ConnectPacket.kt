@@ -15,7 +15,7 @@ data class ConnectPacket(
     val clientId: ClientId,
 
     val properties: ConnectProperties,
-    val will: Will,
+    val will: Will?,
 )
 
 data class ConnectProperties(
