@@ -67,6 +67,7 @@ enum class ControlPacketType(val value: Int) {
             if (!controlType.flagsAreValid(flags))
                 throw MalformedPacketMqttException("Illegal flags $flags for ${controlType.name} MQTT-2.1.3-1")
 
+            println(controlType)
             return controlType
         }
 

@@ -1,6 +1,8 @@
 package de.jkamue
 
+import de.jkamue.mqtt.ConnectReasonCode
 import de.jkamue.mqtt.MalformedPacketMqttException
+import de.jkamue.mqtt.packet.ConnackPacket
 import de.jkamue.mqtt.packet.ControlPacketType
 import de.jkamue.mqtt.packet.Packet
 import io.ktor.network.selector.*
@@ -9,7 +11,9 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import mqtt.encoder.ConnackEncoder
 import mqtt.parser.PacketParser
+import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 
 fun main(args: Array<String>) {
@@ -29,6 +33,11 @@ fun main(args: Array<String>) {
                     while (true) {
                         val packet = readMqttPacket(receive) ?: break
                         println("Received MQTT packet $packet")
+                        val connackPacket = ConnackPacket(false, ConnectReasonCode.SUCCESS)
+                        val writeChannel =
+                            socket.openWriteChannel(autoFlush = true) // or false if you want manual flush
+                        val connackBuffers = ConnackEncoder.encodeScatter(connackPacket)
+                        sendScatter(writeChannel, connackBuffers)
                     }
                     println("Connection closed by peer: ${socket.remoteAddress}")
                 } catch (e: Throwable) {
@@ -71,7 +80,7 @@ suspend fun readMqttPacket(channel: ByteReadChannel): Packet? {
 
 suspend fun readControlPacketType(channel: ByteReadChannel): ControlPacketType {
     val firstByte = channel.readByte()
-    return ControlPacketType.detect(firstByte.toInt())
+    return ControlPacketType.detect(firstByte.toInt() and 0xFF)
 }
 
 suspend fun getPacketContent(channel: ByteReadChannel): ByteArray {
@@ -95,4 +104,12 @@ suspend fun getPacketContentLength(channel: ByteReadChannel): Int {
         if (multiplier > 128 * 128 * 128) throw MalformedPacketMqttException("Malformed Variable Byte Integer")
     } while ((remainingLengthBytes.last().toInt() and 0b10000000) != 0)
     return contentLength
+}
+
+
+suspend fun sendScatter(socketWrite: ByteWriteChannel, parts: Array<ByteBuffer>) {
+    for (part in parts) {
+        part.rewind()
+        socketWrite.writeFully(part)
+    }
 }
