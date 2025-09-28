@@ -16,7 +16,7 @@ data class ConnectPacket(
 
     val properties: ConnectProperties,
     val will: Will?,
-)
+) : Packet(ControlPacketType.CONNECT)
 
 data class ConnectProperties(
     val sessionExpiry: Interval,

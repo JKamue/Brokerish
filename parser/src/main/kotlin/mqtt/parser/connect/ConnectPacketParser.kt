@@ -9,10 +9,8 @@ import mqtt.parser.MQTTByteBuffer
 import mqtt.parser.connect.properties.ConnectPropertiesParser
 import mqtt.parser.connect.will.WillParser
 
-object ConnectPacketParser {
-    fun parseConnectPacket(bytes: ByteArray): ConnectPacket {
-        val buffer = MQTTByteBuffer.wrap(bytes)
-
+internal object ConnectPacketParser {
+    fun parseConnectPacket(buffer: MQTTByteBuffer): ConnectPacket {
         // ------ Variable header ------
         val protocolName = buffer.getEncodedString()
         val protocolVersion = buffer.getUnsignedByte()
