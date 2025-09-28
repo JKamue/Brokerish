@@ -1,13 +1,9 @@
 package mqtt.parser.connect.will
 
-import de.jkamue.mqtt.ContentType
-import de.jkamue.mqtt.Interval
 import de.jkamue.mqtt.MalformedPacketMqttException
-import de.jkamue.mqtt.PayloadFormat
 import de.jkamue.mqtt.ProtocolErrorMqttException
-import de.jkamue.mqtt.Topic
+import de.jkamue.mqtt.valueobject.*
 import mqtt.parser.MQTTByteBuffer
-import de.jkamue.mqtt.WillProperties
 import mqtt.parser.createCopy
 
 object WillPropertyParser {
@@ -23,16 +19,16 @@ object WillPropertyParser {
         return builder.build()
     }
 
-    object WillPropertyHandlers {
+    private object WillPropertyHandlers {
         // Inline function prevents unboxing of value classes even though the function is generic
-        // If propertName is passed as a String, String interpolation happens on every call
+        // If propertyName is passed as a String, String interpolation happens on every call
         // by sending it through a lambda interpolation is deferred to when the exception is actually thrown
         inline fun <T> T?.setOnce(newValue: T, inlineName: () -> String): T {
-            if (this != null) throw ProtocolErrorMqttException("Will ${inlineName()} was present multiple times")
+            if (this != null) throw ProtocolErrorMqttException("Will Property ${inlineName()} was present multiple times")
             return newValue
         }
 
-        val handlers: Map<Int, (MQTTByteBuffer, WillPropertiesBuilder)-> Unit> by lazy {
+        val handlers: Map<Int, (MQTTByteBuffer, WillPropertiesBuilder) -> Unit> by lazy {
             mapOf(
                 WillPropertyIdentifier.WILL_DELAY_INTERVAL.identifier to { buffer, builder ->
                     builder.willDelayInterval = builder.willDelayInterval.setOnce(

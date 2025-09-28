@@ -1,4 +1,4 @@
-package mqtt.parser.connect
+package mqtt.parser.connect.properties
 
 enum class ConnectPropertyIdentifier(val identifier: Int) {
     SESSION_EXPIRY_INTERVAL(17),

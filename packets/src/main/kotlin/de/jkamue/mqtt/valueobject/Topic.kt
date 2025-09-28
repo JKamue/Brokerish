@@ -1,4 +1,4 @@
-package de.jkamue.mqtt
+package de.jkamue.mqtt.valueobject
 
 @JvmInline
 value class Topic(val topic: String)
