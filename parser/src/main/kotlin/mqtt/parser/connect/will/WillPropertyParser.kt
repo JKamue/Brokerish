@@ -1,14 +1,14 @@
-package de.jkamue.packets.connect.parsing.will
+package mqtt.parser.connect.will
 
-import de.jkamue.MalformedPacketMqttException
-import de.jkamue.ProtocolErrorMqttException
-import de.jkamue.packets.ContentType
-import de.jkamue.packets.Interval
-import de.jkamue.packets.MQTTByteBuffer
-import de.jkamue.packets.PayloadFormat
-import de.jkamue.packets.Topic
-import de.jkamue.packets.WillProperties
-import de.jkamue.packets.createCopy
+import de.jkamue.mqtt.ContentType
+import de.jkamue.mqtt.Interval
+import de.jkamue.mqtt.MalformedPacketMqttException
+import de.jkamue.mqtt.PayloadFormat
+import de.jkamue.mqtt.ProtocolErrorMqttException
+import de.jkamue.mqtt.Topic
+import mqtt.parser.MQTTByteBuffer
+import de.jkamue.mqtt.WillProperties
+import mqtt.parser.createCopy
 
 object WillPropertyParser {
 
@@ -57,7 +57,7 @@ object WillPropertyParser {
                 WillPropertyIdentifier.RESPONSE_TOPIC.identifier to { buffer, builder ->
                     builder.responseTopic = builder.responseTopic.setOnce(
                         Topic(buffer.getEncodedString())
-                    ) { "contentType" }
+                    ) { "responseTopic" }
                 },
                 WillPropertyIdentifier.CORRELATION_DATA.identifier to { buffer, builder ->
                     builder.correlationData = builder.correlationData.setOnce(
@@ -74,37 +74,3 @@ object WillPropertyParser {
         }
     }
 }
-
-
-// TODO: Original pattern here
-//val builder = WillPropertiesBuilder()
-//
-//val handlers: Map<Int, (MQTTByteBuffer) -> Unit> = mapOf(
-//    WillPropertyIdentifier.WILL_DELAY_INTERVAL.identifier to { b ->
-//        builder.willDelayInterval = Interval(b.getFourByteInt())
-//    },
-//    WillPropertyIdentifier.PAYLOAD_FORMAT_INDICATOR.identifier to { b ->
-//        builder.payloadIsUtf8 = b.getUnsignedByte() == 1
-//    },
-//    WillPropertyIdentifier.MESSAGE_EXPIRY_INTERVAL.identifier to { b ->
-//        builder.messageExpiryInterval = Interval(b.getFourByteInt())
-//    },
-//    WillPropertyIdentifier.CONTENT_TYPE.identifier to { b ->
-//        builder.contentType = ContentType(b.getEncodedString())
-//    },
-//    WillPropertyIdentifier.RESPONSE_TOPIC.identifier to { b ->
-//        builder.responseTopic = Topic(b.getEncodedString())
-//    },
-//    WillPropertyIdentifier.CORRELATION_DATA.identifier to { b ->
-//        builder.correlationData = b.getBinaryData()
-//    },
-//    WillPropertyIdentifier.USER_PROPERTY.identifier to { b ->
-//        val key = b.getEncodedString()
-//        val value = b.getEncodedString()
-//        builder.userProperties[key] = value
-//    }
-//)
-//
-
-//
-//return builder.build()

@@ -1,7 +1,12 @@
-package de.jkamue.packets
+package mqtt.parser
 
-import de.jkamue.MalformedPacketMqttException
+import de.jkamue.mqtt.MalformedPacketMqttException
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
+
+private val decoderThreadLocal = ThreadLocal.withInitial {
+    Charsets.UTF_8.newDecoder()
+}
 
 @JvmInline
 value class MQTTByteBuffer(private val buffer: ByteBuffer) {
@@ -48,12 +53,26 @@ value class MQTTByteBuffer(private val buffer: ByteBuffer) {
         return slice
     }
 
+    // To get small strings the logic needs to work with like topic names or client ids
     fun getEncodedString(): String {
         val length = getTwoByteInt()
         if (length == 0) return ""
-        val bb = getNextBytes(length)
-        val arr = ByteArray(bb.remaining()) { bb.get() }
-        return String(arr, Charsets.UTF_8)
+        val byteSlice = getNextBytes(length)
+        return decoderThreadLocal.get().decode(byteSlice).toString()
+    }
+
+    // Large messages like the payload that the logic will only ever pass on
+    fun getEncodedCharBuffer(): CharBuffer {
+        val length = getTwoByteInt()
+        if (length == 0) return CharBuffer.wrap("")
+
+        val byteSlice = getNextBytes(length)
+        val decodedView = decoderThreadLocal.get().decode(byteSlice)
+
+        val standaloneBuffer = CharBuffer.allocate(decodedView.remaining())
+        standaloneBuffer.put(decodedView)
+        standaloneBuffer.flip()
+        return standaloneBuffer.asReadOnlyBuffer()
     }
 
     fun getVariableByteInteger(): Int {

@@ -1,10 +1,10 @@
-package de.jkamue.packets.connect.parsing.will
+package mqtt.parser.connect.will
 
-import de.jkamue.packets.ContentType
-import de.jkamue.packets.Interval
-import de.jkamue.packets.PayloadFormat
-import de.jkamue.packets.Topic
-import de.jkamue.packets.WillProperties
+import de.jkamue.mqtt.ContentType
+import de.jkamue.mqtt.Interval
+import de.jkamue.mqtt.PayloadFormat
+import de.jkamue.mqtt.Topic
+import de.jkamue.mqtt.WillProperties
 import java.nio.ByteBuffer
 
 data class WillPropertiesBuilder(
@@ -35,7 +35,6 @@ data class WillPropertiesBuilder(
     }
 
     fun addUserProperty(key: String, value: String) {
-        if (!userProperties.containsKey(key)) userProperties[key] = mutableListOf()
-        userProperties[key]!!.add(value)
+        userProperties.getOrPut(key) { mutableListOf() }.add(value)
     }
 }

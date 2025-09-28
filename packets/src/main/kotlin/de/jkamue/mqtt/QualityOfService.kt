@@ -1,4 +1,4 @@
-package de.jkamue.packets
+package de.jkamue.mqtt
 
 enum class QualityOfService(number: Int) {
     // Values specified in section 4.3

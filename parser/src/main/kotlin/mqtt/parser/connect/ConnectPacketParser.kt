@@ -1,18 +1,18 @@
-package de.jkamue.packets.connect.parsing
+package mqtt.parser.connect
 
-import de.jkamue.MalformedPacketMqttException
-import de.jkamue.packets.MQTTByteBuffer
-import de.jkamue.packets.WillProperties
-import de.jkamue.packets.connect.parsing.ConnectPropertyIdentifier.*
-import de.jkamue.packets.connect.parsing.will.WillPropertyParser
+import de.jkamue.mqtt.ClientId
+import de.jkamue.mqtt.MalformedPacketMqttException
+import mqtt.parser.MQTTByteBuffer
+import de.jkamue.mqtt.WillProperties
+import mqtt.parser.connect.ConnectPropertyIdentifier.*
+import mqtt.parser.connect.will.WillPropertyParser
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
 
-class ConnectPacketParser(
-    bytes: ByteArray
-) {
-    private val buffer = MQTTByteBuffer.Companion.wrap(bytes)
+object ConnectPacketParser {
+    fun parseConnectPacket(bytes: ByteArray) {
+        val buffer = MQTTByteBuffer.wrap(bytes)
 
-    fun parseConnectPacket() {
         val protocolName = buffer.getEncodedString()
         val protocolVersion = buffer.getUnsignedByte()
 
@@ -32,17 +32,17 @@ class ConnectPacketParser(
         val connectPropertiesBuffer = buffer.getNextBytesAsBuffer(connectPropertyLength)
         val connectProperties = parseConnectProperties(connectPropertiesBuffer)
 
-        val clientId = buffer.getEncodedString()
+        val clientId = ClientId(buffer.getEncodedString())
 
         var willConfig: WillProperties? = null
         var willTopic = "no topic set"
-        var willPayload = "no payload set"
+        var willPayload = CharBuffer.wrap("")
         if (willFlag) {
             val willLengthPropertiesLength = buffer.getVariableByteInteger()
             val willPropertiesBuffer = buffer.getNextBytesAsBuffer(willLengthPropertiesLength)
             willConfig = WillPropertyParser.parseConnectWillProperties(willPropertiesBuffer)
             willTopic = buffer.getEncodedString()
-            willPayload = buffer.getEncodedString()
+            willPayload = buffer.getEncodedCharBuffer()
         }
 
         var userName = "no user"

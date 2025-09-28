@@ -1,9 +1,9 @@
-package de.jkamue.packets.connect
+package de.jkamue.mqtt.packet
 
-import de.jkamue.packets.ClientId
-import de.jkamue.packets.Interval
-import de.jkamue.packets.Password
-import de.jkamue.packets.Username
+import de.jkamue.mqtt.ClientId
+import de.jkamue.mqtt.Interval
+import de.jkamue.mqtt.Password
+import de.jkamue.mqtt.Username
 
 data class ConnectPacket(
     val protocolName: String,
@@ -15,7 +15,4 @@ data class ConnectPacket(
     val cleanStart: Boolean,
     val keepAlive: Interval,
     val clientId: ClientId,
-
-
-
-    )
+)

@@ -1,4 +1,4 @@
-package de.jkamue.packets.connect.parsing.will
+package mqtt.parser.connect.will
 
 enum class WillPropertyIdentifier(val identifier: Int) {
     WILL_DELAY_INTERVAL(24),

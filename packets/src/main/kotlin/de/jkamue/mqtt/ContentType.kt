@@ -1,4 +1,4 @@
-package de.jkamue.packets
+package de.jkamue.mqtt
 
 @JvmInline
 value class ContentType(val contentType: String)

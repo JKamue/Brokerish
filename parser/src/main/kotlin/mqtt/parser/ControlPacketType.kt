@@ -1,6 +1,6 @@
-package de.jkamue.header.controlpacket
+package mqtt.parser
 
-import de.jkamue.MalformedPacketMqttException
+import de.jkamue.mqtt.MalformedPacketMqttException
 
 enum class ControlPacketType(val value: Int) {
     // Specified in Table 2-1 of MQTT 5.0 spec

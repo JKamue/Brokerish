@@ -1,7 +1,8 @@
 package de.jkamue
 
-import de.jkamue.header.controlpacket.ControlPacketType
-import de.jkamue.packets.connect.parsing.ConnectPacketParser
+import mqtt.parser.ControlPacketType
+import de.jkamue.mqtt.MalformedPacketMqttException
+import mqtt.parser.connect.ConnectPacketParser
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
@@ -87,7 +88,7 @@ object TlsRawSocket {
 
             val test = full.joinToString(" ") { "%02x".format(it) }
 
-            ConnectPacketParser(payload).parseConnectPacket()
+            ConnectPacketParser.parseConnectPacket(payload)
 
             return full
         } catch (ex: Throwable) {

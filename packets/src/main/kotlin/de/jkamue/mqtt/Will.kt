@@ -1,4 +1,4 @@
-package de.jkamue.packets
+package de.jkamue.mqtt
 
 import java.nio.ByteBuffer
 
@@ -8,7 +8,7 @@ data class Will(
     val topic: Topic,
     val payload: Payload,
 
-)
+    )
 
 data class WillProperties(
     val willDelayInterval: Interval,

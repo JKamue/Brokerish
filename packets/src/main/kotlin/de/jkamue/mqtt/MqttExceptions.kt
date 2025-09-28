@@ -1,4 +1,4 @@
-package de.jkamue
+package de.jkamue.mqtt
 
 // Reason codes as specified in Table 2-6
 open class MqttException(reasonCode: Int, message: String) : Exception(message)

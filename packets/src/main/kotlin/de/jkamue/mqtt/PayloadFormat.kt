@@ -1,6 +1,4 @@
-package de.jkamue.packets
-
-import de.jkamue.PayloadFormatInvalidMqttException
+package de.jkamue.mqtt
 
 enum class PayloadFormat(val value: Int) {
     UNSPECIFIED_BYTES(0),

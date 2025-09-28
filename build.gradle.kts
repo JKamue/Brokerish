@@ -11,6 +11,8 @@ application {
 }
 
 dependencies {
+    implementation(project(":packets"))
+    implementation(project(":parser"))
     implementation(libs.ktor.network.tls)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
