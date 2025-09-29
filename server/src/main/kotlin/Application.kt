@@ -1,20 +1,30 @@
 package de.jkamue
 
-import de.jkamue.mqtt.ConnectReasonCode
 import de.jkamue.mqtt.MalformedPacketMqttException
-import de.jkamue.mqtt.packet.ConnackPacket
+import de.jkamue.mqtt.logic.MqttServer
+import de.jkamue.mqtt.packet.ConnectPacket
 import de.jkamue.mqtt.packet.ControlPacketType
 import de.jkamue.mqtt.packet.Packet
+import de.jkamue.mqtt.valueobject.ClientId
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mqtt.encoder.ConnackEncoder
+import mqtt.encoder.PacketEncoder
 import mqtt.parser.PacketParser
 import java.nio.ByteBuffer
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.system.measureNanoTime
+
+val sessions = ConcurrentHashMap<ClientId, ClientSession>()
+
+data class ClientSession(
+    val writer: ByteWriteChannel,
+    val outgoing: Channel<Array<ByteBuffer>>
+)
 
 fun main(args: Array<String>) {
     runBlocking {
@@ -28,22 +38,45 @@ fun main(args: Array<String>) {
 
             // Handle each client in its own coroutine
             launch {
-                val receive = socket.openReadChannel()
+                val readChannel = socket.openReadChannel()
+                val writeChannel = socket.openWriteChannel(autoFlush = true)
+
+                val session = ClientSession(writeChannel, Channel(Channel.UNLIMITED))
+
+                val connectPacket =
+                    readMqttPacket(readChannel)
+                        ?: throw MalformedPacketMqttException("First CONNECT packet not readable")
+                if (connectPacket.packetType != ControlPacketType.CONNECT) throw MalformedPacketMqttException("First packet is no connect packet")
+                val response = MqttServer.processConnectPacket(connectPacket as ConnectPacket)
+                val clientId = response.first
+                val encodedResponse = PacketEncoder.encodeScatter(response.second)
+                sendScatter(writeChannel, encodedResponse)
+
+                launch {
+                    for (message in session.outgoing) {
+                        sendScatter(writeChannel, message)
+                    }
+                }
+
                 try {
                     while (true) {
-                        val packet = readMqttPacket(receive) ?: break
+                        val packet = readMqttPacket(readChannel) ?: break
                         println("Received MQTT packet $packet")
-                        val connackPacket = ConnackPacket(false, ConnectReasonCode.SUCCESS)
-                        val writeChannel =
-                            socket.openWriteChannel(autoFlush = true) // or false if you want manual flush
-                        val connackBuffers = ConnackEncoder.encodeScatter(connackPacket)
-                        sendScatter(writeChannel, connackBuffers)
+                        val response = MqttServer.processPacket(clientId, packet)
+
+                        for (packetToSend in response) {
+                            // TODO: Encode on sending side to not block socket here potentially?
+                            val encodedPacket = PacketEncoder.encodeScatter(packetToSend.second)
+                            sessions[packetToSend.first]?.outgoing?.send(encodedPacket)
+                        }
                     }
                     println("Connection closed by peer: ${socket.remoteAddress}")
                 } catch (e: Throwable) {
                     println("Client handler error (${socket.remoteAddress}): ${e.message}")
                 } finally {
                     try {
+                        clientId?.let { sessions.remove(it) }
+                        session.outgoing.close()
                         socket.close()
                     } catch (ex: Throwable) {
                         println(ex)

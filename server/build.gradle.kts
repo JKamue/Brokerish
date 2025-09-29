@@ -13,6 +13,7 @@ application {
 dependencies {
     implementation(project(":packets"))
     implementation(project(":parser"))
+    implementation(project(":logic"))
     implementation(libs.ktor.network.tls)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
