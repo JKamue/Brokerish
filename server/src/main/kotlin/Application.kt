@@ -30,16 +30,16 @@ fun main(args: Array<String>) {
     runBlocking {
         val selectorManager = SelectorManager(Dispatchers.IO)
         val serverSocket = aSocket(selectorManager).tcp().bind("127.0.0.1", 9002)
-        println("MQTT-listening server is running at ${serverSocket.localAddress}")
+        log("MQTT-listening server is running at ${serverSocket.localAddress}")
 
         while (true) {
             val socket = serverSocket.accept()
-            println("Accepted connection from ${socket.remoteAddress}")
+            log("Accepted connection from ${socket.remoteAddress}")
 
             // Handle each client in its own coroutine
             launch {
                 val readChannel = socket.openReadChannel()
-                val writeChannel = socket.openWriteChannel(autoFlush = true)
+                val writeChannel = socket.openWriteChannel()
 
                 val session = ClientSession(writeChannel, Channel(Channel.UNLIMITED))
 
@@ -49,6 +49,7 @@ fun main(args: Array<String>) {
                 if (connectPacket.packetType != ControlPacketType.CONNECT) throw MalformedPacketMqttException("First packet is no connect packet")
                 val response = MqttServer.processConnectPacket(connectPacket as ConnectPacket)
                 val clientId = response.first
+                sessions[clientId] = session
                 val encodedResponse = PacketEncoder.encodeScatter(response.second)
                 sendScatter(writeChannel, encodedResponse)
 
@@ -61,25 +62,27 @@ fun main(args: Array<String>) {
                 try {
                     while (true) {
                         val packet = readMqttPacket(readChannel) ?: break
-                        println("Received MQTT packet $packet")
+                        log("Received MQTT packet $packet")
                         val response = MqttServer.processPacket(clientId, packet)
 
                         for (packetToSend in response) {
+                            log("Sending ${packetToSend.first} ${packetToSend.second}")
                             // TODO: Encode on sending side to not block socket here potentially?
                             val encodedPacket = PacketEncoder.encodeScatter(packetToSend.second)
                             sessions[packetToSend.first]?.outgoing?.send(encodedPacket)
                         }
                     }
-                    println("Connection closed by peer: ${socket.remoteAddress}")
+                    log("Connection closed by peer: ${socket.remoteAddress}")
                 } catch (e: Throwable) {
-                    println("Client handler error (${socket.remoteAddress}): ${e.message}")
+                    log("Client handler error (${socket.remoteAddress}): ${e.message}")
+                    e.printStackTrace()
                 } finally {
                     try {
-                        clientId?.let { sessions.remove(it) }
+                        sessions.remove(clientId)
                         session.outgoing.close()
                         socket.close()
                     } catch (ex: Throwable) {
-                        println(ex)
+                        log(ex.toString())
                     }
                 }
             }
@@ -96,17 +99,34 @@ fun main(args: Array<String>) {
  */
 suspend fun readMqttPacket(channel: ByteReadChannel): Packet? {
     try {
-        val controlPacketType = readControlPacketType(channel)
-        val content = getPacketContent(channel)
+        val controlPacketType = try {
+            readControlPacketType(channel)
+        } catch (e: java.io.EOFException) {
+            log("readMqttPacket: EOF while reading first byte -> connection closed by peer")
+            return null
+        }
+        log("Starting to receive packet of type $controlPacketType")
+
+        val content = try {
+            getPacketContent(channel)
+        } catch (e: java.io.EOFException) {
+            log("readMqttPacket: EOF while reading remaining length / payload -> connection closed by peer")
+            return null
+        }
 
         var packet: Packet? = null
         val parsingTimeNanos = measureNanoTime {
             packet = PacketParser.parsePacket(content, controlPacketType)
         }
         val parsingTimeMicros = parsingTimeNanos / 1000.0
-        println("Parsing took $parsingTimeNanos ns (or $parsingTimeMicros µs).")
+        log("Parsing took $parsingTimeNanos ns (or $parsingTimeMicros µs).")
         return packet
+    } catch (ex: MalformedPacketMqttException) {
+        // rethrow known MQTT protocol errors to be handled by caller if desired
+        throw ex
     } catch (ex: Throwable) {
+        // unexpected errors: log and rethrow so outer handler can close the socket and print stack trace
+        log("readMqttPacket: unexpected error: ${ex.message}")
         throw ex
     }
 }
@@ -118,8 +138,11 @@ suspend fun readControlPacketType(channel: ByteReadChannel): ControlPacketType {
 
 suspend fun getPacketContent(channel: ByteReadChannel): ByteArray {
     val contentLength = getPacketContentLength(channel)
+    if (contentLength < 0) throw MalformedPacketMqttException("Negative content length")
     val payload = ByteArray(contentLength)
-    channel.readFully(payload, 0, contentLength)
+    if (contentLength > 0) {
+        channel.readFully(payload, 0, contentLength)
+    }
     return payload
 }
 
@@ -145,4 +168,8 @@ suspend fun sendScatter(socketWrite: ByteWriteChannel, parts: Array<ByteBuffer>)
         part.rewind()
         socketWrite.writeFully(part)
     }
+}
+
+fun log(msg: String) {
+    AsyncLogger.log(msg)
 }
