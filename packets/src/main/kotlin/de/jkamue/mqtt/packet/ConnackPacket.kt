@@ -1,7 +1,6 @@
 package de.jkamue.mqtt.packet
 
 import de.jkamue.mqtt.ConnectReasonCode
-import de.jkamue.mqtt.valueobject.ClientId
 
 data class ConnackPacket(
     val sessionPresent: Boolean,
@@ -12,7 +11,7 @@ data class ConnackPacket(
 //    val maximumQualityOfService: QualityOfService?,
 //    val retainAvailable: Boolean?, // TODO
 //    val maximumPacketSize: MaximumPacketSize?,
-    val assignedClientIdentifier: ClientId?, // TODO
+//    val assignedClientIdentifier: ClientId?, // TODO
 //    val topicAliasMaximum: TopicAliasMaximum?,
 //    val reasonString: String?,
 //    val userProperties: UserProperties?,

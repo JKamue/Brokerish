@@ -1,6 +1,7 @@
-package mqtt.encoder
+package mqtt.encoder.connack
 
 import de.jkamue.mqtt.packet.ConnackPacket
+import mqtt.encoder.MqttEncoderHelpers
 import java.nio.ByteBuffer
 
 object ConnackEncoder {
