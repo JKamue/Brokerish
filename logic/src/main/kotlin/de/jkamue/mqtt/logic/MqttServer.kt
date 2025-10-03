@@ -2,51 +2,52 @@ package de.jkamue.mqtt.logic
 
 import de.jkamue.mqtt.ConnectReasonCode
 import de.jkamue.mqtt.DisconnectReasonCode
-import de.jkamue.mqtt.ProtocolErrorMqttException
 import de.jkamue.mqtt.packet.*
 import de.jkamue.mqtt.valueobject.ClientId
-import java.util.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
-object MqttServer {
+class MqttServer(scope: CoroutineScope) {
+    val commandChannel = Channel<ServerCommand>(Channel.UNLIMITED)
+    private val clients = ConcurrentHashMap<ClientId, SendChannel<Packet>>()
 
-    private val clients = ConcurrentHashMap<ClientId, UUID>()
+    init {
+        scope.launch(Dispatchers.Default) {
+            for (command in commandChannel) {
+                when (command) {
+                    is ClientConnected -> {
+                        clients[command.clientId]?.send(DisconnectPacket(DisconnectReasonCode.SESSION_TAKEN_OVER))
+                        clients[command.clientId] = command.outgoing
+                    }
 
-    fun processPacket(channelId: UUID, packet: Packet): List<Pair<UUID, Packet>> {
-        return when (packet) {
-            is PingreqPacket -> processPingreqPacket(channelId)
-            is ConnectPacket -> throw ProtocolErrorMqttException("Connect packet sent incorrectly")
-            else -> throw NotImplementedError("Packet not implemented yet")
+                    is ClientDisconnected -> {
+                        clients.remove(command.clientId)
+                        // TODO: Publish Will message by sending to other client channels
+                    }
+
+                    is PacketReceived -> handlePacket(command.clientId, command.packet)
+                }
+            }
         }
     }
 
-    fun processPingreqPacket(channelId: UUID): List<Pair<UUID, Packet>> {
-        return listOf(Pair(channelId, PingrespPacket))
-    }
-
-    data class ConnectPacketResult(
-        val newChannelId: UUID,
-        val connackPacket: Packet,
-        val disconnect: Pair<UUID, Packet>?
-    )
-
-    fun processConnectPacket(packet: ConnectPacket): ConnectPacketResult {
-        val channelId = UUID.randomUUID()
-        val clientId = packet.clientId
-        // If the ClientID represents a Client already connected to the Server, the Server sends a DISCONNECT packet to the existing Client with Reason Code of 0x8E (Session taken over) - MQTT-3.1.4-3
-        val disconnect = clients[clientId]?.let { Pair(it, DisconnectPacket(DisconnectReasonCode.SESSION_TAKEN_OVER)) }
-        clients[clientId] = channelId
-
-        val responsePacket =
-            ConnackPacket(
-                sessionPresent = false,
-                connectReasonCode = ConnectReasonCode.SUCCESS
+    private suspend fun handlePacket(clientId: ClientId, packet: Packet) {
+        val outgoing = clients[clientId] ?: return
+        val responses: List<Packet> = when (packet) {
+            is ConnectPacket -> listOf(
+                ConnackPacket(
+                    sessionPresent = false, // TODO: session handling
+                    connectReasonCode = ConnectReasonCode.SUCCESS
+                )
             )
 
-        return ConnectPacketResult(
-            newChannelId = channelId,
-            connackPacket = responsePacket,
-            disconnect = disconnect
-        )
+            is PingreqPacket -> listOf(PingrespPacket)
+            else -> emptyList()
+        }
+        responses.forEach { outgoing.send(it) }
     }
 }
