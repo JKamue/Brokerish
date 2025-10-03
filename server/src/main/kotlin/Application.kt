@@ -1,5 +1,6 @@
 package de.jkamue
 
+import de.jkamue.Settings.SERVER_MAX_PACKET_SIZE
 import de.jkamue.mqtt.MalformedPacketMqttException
 import de.jkamue.mqtt.logic.ClientConnected
 import de.jkamue.mqtt.logic.ClientDisconnected
@@ -20,7 +21,6 @@ import mqtt.parser.PacketParser
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 
-
 fun main() {
     runBlocking {
         val selectorManager = ActorSelectorManager(Dispatchers.IO)
@@ -38,12 +38,13 @@ fun main() {
                 serverScope.launch {
                     log("Accepted connection from ${socket.remoteAddress}")
                     val readChannel = socket.openReadChannel()
+                    val readBuffer = ByteArray(SERVER_MAX_PACKET_SIZE)
                     val writeChannel = socket.openWriteChannel(autoFlush = false)
                     val outgoingPackets = Channel<Packet>(Channel.BUFFERED)
                     var clientId: ClientId? = null // Hold clientId for the finally block
 
                     try {
-                        val firstPacket = readMqttPacket(readChannel)
+                        val firstPacket = readMqttPacket(readChannel, readBuffer)
                         if (firstPacket !is ConnectPacket) {
                             log("First packet was not CONNECT, closing connection.")
                             socket.close()
@@ -68,7 +69,7 @@ fun main() {
 
                         // Reader coroutine
                         while (socket.isActive) {
-                            val packet = readMqttPacket(readChannel) ?: break // Connection closed
+                            val packet = readMqttPacket(readChannel, readBuffer) ?: break // Connection closed
                             mqttServer.commandChannel.send(PacketReceived(clientId, packet))
                         }
 
@@ -94,7 +95,7 @@ fun main() {
  *
  * Returns null when the channel is closed / EOF reached.
  */
-suspend fun readMqttPacket(channel: ByteReadChannel): Packet? {
+suspend fun readMqttPacket(channel: ByteReadChannel, reusableBuffer: ByteArray): Packet? {
     try {
         val controlPacketType = try {
             readControlPacketType(channel)
@@ -105,7 +106,7 @@ suspend fun readMqttPacket(channel: ByteReadChannel): Packet? {
         log("Starting to receive packet of type $controlPacketType")
 
         val content = try {
-            getPacketContent(channel)
+            getPacketContent(channel, reusableBuffer)
         } catch (e: java.io.EOFException) {
             log("readMqttPacket: EOF while reading remaining length / payload -> connection closed by peer")
             return null
@@ -133,14 +134,15 @@ suspend fun readControlPacketType(channel: ByteReadChannel): ControlPacketType {
     return ControlPacketType.detect(firstByte.toInt() and 0xFF)
 }
 
-suspend fun getPacketContent(channel: ByteReadChannel): ByteArray {
-    val contentLength = getPacketContentLength(channel)
-    if (contentLength < 0) throw MalformedPacketMqttException("Negative content length")
-    val payload = ByteArray(contentLength)
-    if (contentLength > 0) {
-        channel.readFully(payload, 0, contentLength)
-    }
-    return payload
+suspend fun getPacketContent(channel: ByteReadChannel, reusableBuffer: ByteArray): ByteBuffer {
+    val packetBodyLength = getPacketContentLength(channel)
+    if (packetBodyLength < 0) throw MalformedPacketMqttException("Negative content length")
+    if (packetBodyLength > SERVER_MAX_PACKET_SIZE) throw MalformedPacketMqttException("Package too large")
+
+    channel.readFully(reusableBuffer, 0, packetBodyLength)
+    val wrapper = ByteBuffer.wrap(reusableBuffer)
+    wrapper.limit(packetBodyLength)
+    return wrapper.slice().asReadOnlyBuffer()
 }
 
 suspend fun getPacketContentLength(channel: ByteReadChannel): Int {
