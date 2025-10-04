@@ -13,14 +13,15 @@ import java.util.concurrent.ConcurrentHashMap
 
 class MqttServer(scope: CoroutineScope) {
     val commandChannel = Channel<ServerCommand>(Channel.UNLIMITED)
-    private val clients = ConcurrentHashMap<ClientId, SendChannel<Packet>>()
+    private val clients = ConcurrentHashMap<ClientId, SendChannel<OutgoingMessage>>()
 
     init {
         scope.launch(Dispatchers.Default) {
             for (command in commandChannel) {
                 when (command) {
                     is ClientConnected -> {
-                        clients[command.clientId]?.send(DisconnectPacket(DisconnectReasonCode.SESSION_TAKEN_OVER))
+                        val disconnectMsg = OutgoingMessage(DisconnectPacket(DisconnectReasonCode.SESSION_TAKEN_OVER))
+                        clients[command.clientId]?.send(disconnectMsg)
                         clients[command.clientId] = command.outgoing
                     }
 
@@ -29,25 +30,41 @@ class MqttServer(scope: CoroutineScope) {
                         // TODO: Publish Will message by sending to other client channels
                     }
 
-                    is PacketReceived -> handlePacket(command.clientId, command.packet)
+                    is PacketReceived -> {
+                        handlePacket(command)
+                    }
                 }
             }
         }
     }
 
-    private suspend fun handlePacket(clientId: ClientId, packet: Packet) {
-        val outgoing = clients[clientId] ?: return
-        val responses: List<Packet> = when (packet) {
-            is ConnectPacket -> listOf(
-                ConnackPacket(
+    private suspend fun handlePacket(command: PacketReceived) {
+        val (clientId, packet, payloadManager) = command
+        val outgoing = clients[clientId] ?: run {
+            // If client is not found, we must release the payload
+            payloadManager.getReleaseAction()()
+            return
+        }
+
+        when (packet) {
+            is ConnectPacket -> {
+                val response = ConnackPacket(
                     sessionPresent = false, // TODO: session handling
                     connectReasonCode = ConnectReasonCode.SUCCESS
                 )
-            )
+                payloadManager.getReleaseAction().invoke()
+                outgoing.send(OutgoingMessage(response))
+            }
 
-            is PingreqPacket -> listOf(PingrespPacket)
-            else -> emptyList()
+            is PingreqPacket -> {
+                payloadManager.getReleaseAction().invoke()
+                outgoing.send(OutgoingMessage(PingrespPacket))
+            }
+
+            else -> {
+                // For any other packet type, we don't know what to do, so just release the resource.
+                payloadManager.getReleaseAction().invoke()
+            }
         }
-        responses.forEach { outgoing.send(it) }
     }
 }

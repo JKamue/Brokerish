@@ -1,11 +1,9 @@
 package de.jkamue
 
-import de.jkamue.Settings.SERVER_MAX_PACKET_SIZE
+import BufferPool
+import ReferenceCountedRelease
 import de.jkamue.mqtt.MalformedPacketMqttException
-import de.jkamue.mqtt.logic.ClientConnected
-import de.jkamue.mqtt.logic.ClientDisconnected
-import de.jkamue.mqtt.logic.MqttServer
-import de.jkamue.mqtt.logic.PacketReceived
+import de.jkamue.mqtt.logic.*
 import de.jkamue.mqtt.packet.ConnectPacket
 import de.jkamue.mqtt.packet.ControlPacketType
 import de.jkamue.mqtt.packet.DisconnectPacket
@@ -20,6 +18,14 @@ import mqtt.encoder.PacketEncoder
 import mqtt.parser.PacketParser
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
+
+/**
+ * Concrete implementation of PayloadManager that manages a leased ByteBuffer.
+ */
+private class BufferPayloadManager(private val buffer: ByteBuffer) : PayloadManager {
+    override fun getReleaseAction(): () -> Unit = { BufferPool.release(buffer) }
+    override fun getSharedReleaseAction(count: Int): () -> Unit = ReferenceCountedRelease(buffer, count)
+}
 
 fun main() {
     runBlocking {
@@ -38,39 +44,56 @@ fun main() {
                 serverScope.launch {
                     log("Accepted connection from ${socket.remoteAddress}")
                     val readChannel = socket.openReadChannel()
-                    val readBuffer = ByteArray(SERVER_MAX_PACKET_SIZE)
                     val writeChannel = socket.openWriteChannel(autoFlush = false)
-                    val outgoingPackets = Channel<Packet>(Channel.BUFFERED)
+                    val outgoingPackets = Channel<OutgoingMessage>(Channel.BUFFERED)
                     var clientId: ClientId? = null // Hold clientId for the finally block
 
+                    var buffer: ByteBuffer? = null
+
                     try {
-                        val firstPacket = readMqttPacket(readChannel, readBuffer)
+                        val leasedBuffer = BufferPool.lease()
+                        buffer = leasedBuffer
+
+                        val firstPacket = readMqttPacket(readChannel, leasedBuffer)
                         if (firstPacket !is ConnectPacket) {
                             log("First packet was not CONNECT, closing connection.")
+                            BufferPool.release(leasedBuffer) // Release buffer before exiting
                             socket.close()
                             return@launch
                         }
                         clientId = firstPacket.clientId
 
+                        val payloadManager = BufferPayloadManager(leasedBuffer)
                         mqttServer.commandChannel.send(ClientConnected(clientId, outgoingPackets))
-                        mqttServer.commandChannel.send(PacketReceived(clientId, firstPacket))
+                        mqttServer.commandChannel.send(PacketReceived(clientId, firstPacket, payloadManager))
+                        buffer = null
+
 
                         // Writer coroutine
                         launch {
-                            for (packet in outgoingPackets) {
-                                log("Sending packet ${packet.packetType} to $clientId.")
-                                val encoded = PacketEncoder.encodeScatter(packet)
+                            for (message in outgoingPackets) {
+                                log("Sending packet ${message.packet.packetType} to $clientId.")
+                                val encoded = PacketEncoder.encodeScatter(message.packet)
                                 sendScatter(writeChannel, encoded)
-                                if (packet is DisconnectPacket) {
-                                    socket.close() // Close the socket after sending DISCONNECT
+                                message.afterSend()
+
+                                if (message.packet is DisconnectPacket) {
+                                    socket.close()
                                 }
                             }
                         }
 
                         // Reader coroutine
                         while (socket.isActive) {
-                            val packet = readMqttPacket(readChannel, readBuffer) ?: break // Connection closed
-                            mqttServer.commandChannel.send(PacketReceived(clientId, packet))
+                            val subsequentLeasedBuffer = BufferPool.lease()
+                            buffer = subsequentLeasedBuffer
+
+                            val packet =
+                                readMqttPacket(readChannel, subsequentLeasedBuffer) ?: break // Connection closed
+
+                            val subsequentPayloadManager = BufferPayloadManager(subsequentLeasedBuffer)
+                            mqttServer.commandChannel.send(PacketReceived(clientId, packet, subsequentPayloadManager))
+                            buffer = null
                         }
 
                     } catch (e: Exception) {
@@ -80,6 +103,7 @@ fun main() {
                         clientId?.let { mqttServer.commandChannel.send(ClientDisconnected(it)) }
                         outgoingPackets.close()
                         socket.close()
+                        buffer?.let { BufferPool.release(it) }
                     }
                 }
             }
@@ -89,13 +113,12 @@ fun main() {
 
 
 /**
- * Reads a single MQTT Control Packet from the provided ByteReadChannel.
- * Returns the entire packet as a ByteArray:
- * [firstByte][encodedRemainingLengthBytes][payload]
+ * Reads a single MQTT Control Packet from the provided ByteReadChannel into the given ByteBuffer.
+ * The buffer is used to read the packet content directly from the socket.
  *
  * Returns null when the channel is closed / EOF reached.
  */
-suspend fun readMqttPacket(channel: ByteReadChannel, reusableBuffer: ByteArray): Packet? {
+suspend internal fun readMqttPacket(channel: ByteReadChannel, buffer: ByteBuffer): Packet? {
     try {
         val controlPacketType = try {
             readControlPacketType(channel)
@@ -106,13 +129,13 @@ suspend fun readMqttPacket(channel: ByteReadChannel, reusableBuffer: ByteArray):
         log("Starting to receive packet of type $controlPacketType")
 
         val content = try {
-            getPacketContent(channel, reusableBuffer)
+            getPacketContent(channel, buffer)
         } catch (e: java.io.EOFException) {
             log("readMqttPacket: EOF while reading remaining length / payload -> connection closed by peer")
             return null
         }
 
-        var packet: Packet? = null
+        lateinit var packet: Packet
         val parsingTimeNanos = measureNanoTime {
             packet = PacketParser.parsePacket(content, controlPacketType)
         }
@@ -134,15 +157,15 @@ suspend fun readControlPacketType(channel: ByteReadChannel): ControlPacketType {
     return ControlPacketType.detect(firstByte.toInt() and 0xFF)
 }
 
-suspend fun getPacketContent(channel: ByteReadChannel, reusableBuffer: ByteArray): ByteBuffer {
+suspend fun getPacketContent(channel: ByteReadChannel, buffer: ByteBuffer): ByteBuffer {
     val packetBodyLength = getPacketContentLength(channel)
     if (packetBodyLength < 0) throw MalformedPacketMqttException("Negative content length")
-    if (packetBodyLength > SERVER_MAX_PACKET_SIZE) throw MalformedPacketMqttException("Package too large")
+    if (packetBodyLength > buffer.capacity()) throw MalformedPacketMqttException("Package too large for buffer")
 
-    channel.readFully(reusableBuffer, 0, packetBodyLength)
-    val wrapper = ByteBuffer.wrap(reusableBuffer)
-    wrapper.limit(packetBodyLength)
-    return wrapper.slice().asReadOnlyBuffer()
+    buffer.limit(packetBodyLength)
+    channel.readFully(buffer)
+    buffer.flip()
+    return buffer.slice().asReadOnlyBuffer()
 }
 
 suspend fun getPacketContentLength(channel: ByteReadChannel): Int {
