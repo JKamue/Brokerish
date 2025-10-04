@@ -125,6 +125,7 @@ fun main() {
  * Returns null when the channel is closed / EOF reached.
  */
 internal suspend fun readMqttPacket(channel: ByteReadChannel): Pair<Packet, ByteBuffer>? {
+    var buffer: ByteBuffer? = null
     try {
         val controlPacketType = try {
             readControlPacketType(channel)
@@ -134,7 +135,7 @@ internal suspend fun readMqttPacket(channel: ByteReadChannel): Pair<Packet, Byte
         }
         log("Starting to receive packet of type $controlPacketType")
 
-        val buffer = BufferPool.lease()
+        buffer = BufferPool.lease()
         val content = try {
             getPacketContent(channel, buffer)
         } catch (e: java.io.EOFException) {
@@ -152,9 +153,11 @@ internal suspend fun readMqttPacket(channel: ByteReadChannel): Pair<Packet, Byte
         return Pair(packet, buffer)
     } catch (ex: MalformedPacketMqttException) {
         // rethrow known MQTT protocol errors to be handled by caller if desired
+        buffer?.let { BufferPool.release(buffer) }
         throw ex
     } catch (ex: Throwable) {
         // unexpected errors: log and rethrow so outer handler can close the socket and print stack trace
+        buffer?.let { BufferPool.release(buffer) }
         log("readMqttPacket: unexpected error: ${ex.message}")
         throw ex
     }
