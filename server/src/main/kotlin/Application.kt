@@ -18,6 +18,7 @@ import mqtt.encoder.PacketEncoder
 import mqtt.parser.PacketParser
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Concrete implementation of PayloadManager that manages a leased ByteBuffer.
@@ -62,6 +63,8 @@ fun main() {
                         val leasedBuffer = packetAndBuffer.second
                         buffer = leasedBuffer
                         clientId = firstPacket.clientId
+                        val keepAlive = (firstPacket.keepAlive.duration + 2).seconds
+
 
                         val payloadManager = BufferPayloadManager(leasedBuffer)
                         mqttServer.commandChannel.send(ClientConnected(clientId, outgoingPackets))
@@ -85,8 +88,9 @@ fun main() {
 
                         // Reader coroutine
                         while (socket.isActive) {
-                            val packetAndBuffer =
-                                readMqttPacket(readChannel) ?: break // Connection closed
+                            val packetAndBuffer = withTimeoutOrNull(keepAlive) {
+                                readMqttPacket(readChannel)
+                            } ?: break // Connection closed
 
                             val subsequentPayloadManager = BufferPayloadManager(packetAndBuffer.second)
                             mqttServer.commandChannel.send(

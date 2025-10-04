@@ -1,10 +1,11 @@
 import de.jkamue.AsyncLogger.log
+import de.jkamue.Settings.SERVER_MAX_PACKET_SIZE
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 object BufferPool {
-    private const val BUFFER_SIZE = 8192 // 8KB buffers
+    private const val BUFFER_SIZE = SERVER_MAX_PACKET_SIZE // 8KB buffers
 
     private val pool = ConcurrentLinkedQueue<ByteBuffer>()
     private val leasedBuffers = AtomicInteger(0)
@@ -26,6 +27,6 @@ object BufferPool {
         buffer.clear()
         pool.offer(buffer)
         leasedBuffers.decrementAndGet()
-        log("[Buffer Pool]: $allocatedBuffers allocated, $leasedBuffers released")
+        log("[Buffer Pool]: $allocatedBuffers allocated, $leasedBuffers leased, released")
     }
 }
