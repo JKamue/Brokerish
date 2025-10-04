@@ -51,16 +51,16 @@ fun main() {
                     var buffer: ByteBuffer? = null
 
                     try {
-                        val leasedBuffer = BufferPool.lease()
-                        buffer = leasedBuffer
-
-                        val firstPacket = readMqttPacket(readChannel, leasedBuffer)
-                        if (firstPacket !is ConnectPacket) {
+                        val packetAndBuffer = readMqttPacket(readChannel)
+                        if (packetAndBuffer == null || packetAndBuffer.first !is ConnectPacket) {
                             log("First packet was not CONNECT, closing connection.")
-                            BufferPool.release(leasedBuffer) // Release buffer before exiting
+                            BufferPool.release(packetAndBuffer!!.second)
                             socket.close()
                             return@launch
                         }
+                        val firstPacket = packetAndBuffer.first as ConnectPacket
+                        val leasedBuffer = packetAndBuffer.second
+                        buffer = leasedBuffer
                         clientId = firstPacket.clientId
 
                         val payloadManager = BufferPayloadManager(leasedBuffer)
@@ -85,15 +85,17 @@ fun main() {
 
                         // Reader coroutine
                         while (socket.isActive) {
-                            val subsequentLeasedBuffer = BufferPool.lease()
-                            buffer = subsequentLeasedBuffer
+                            val packetAndBuffer =
+                                readMqttPacket(readChannel) ?: break // Connection closed
 
-                            val packet =
-                                readMqttPacket(readChannel, subsequentLeasedBuffer) ?: break // Connection closed
-
-                            val subsequentPayloadManager = BufferPayloadManager(subsequentLeasedBuffer)
-                            mqttServer.commandChannel.send(PacketReceived(clientId, packet, subsequentPayloadManager))
-                            buffer = null
+                            val subsequentPayloadManager = BufferPayloadManager(packetAndBuffer.second)
+                            mqttServer.commandChannel.send(
+                                PacketReceived(
+                                    clientId,
+                                    packetAndBuffer.first,
+                                    subsequentPayloadManager
+                                )
+                            )
                         }
 
                     } catch (e: Exception) {
@@ -118,7 +120,7 @@ fun main() {
  *
  * Returns null when the channel is closed / EOF reached.
  */
-suspend internal fun readMqttPacket(channel: ByteReadChannel, buffer: ByteBuffer): Packet? {
+internal suspend fun readMqttPacket(channel: ByteReadChannel): Pair<Packet, ByteBuffer>? {
     try {
         val controlPacketType = try {
             readControlPacketType(channel)
@@ -128,10 +130,12 @@ suspend internal fun readMqttPacket(channel: ByteReadChannel, buffer: ByteBuffer
         }
         log("Starting to receive packet of type $controlPacketType")
 
+        val buffer = BufferPool.lease()
         val content = try {
             getPacketContent(channel, buffer)
         } catch (e: java.io.EOFException) {
             log("readMqttPacket: EOF while reading remaining length / payload -> connection closed by peer")
+            BufferPool.release(buffer)
             return null
         }
 
@@ -141,7 +145,7 @@ suspend internal fun readMqttPacket(channel: ByteReadChannel, buffer: ByteBuffer
         }
         val parsingTimeMicros = parsingTimeNanos / 1000.0
         log("Parsing took $parsingTimeNanos ns (or $parsingTimeMicros µs).")
-        return packet
+        return Pair(packet, buffer)
     } catch (ex: MalformedPacketMqttException) {
         // rethrow known MQTT protocol errors to be handled by caller if desired
         throw ex
@@ -192,6 +196,6 @@ suspend fun sendScatter(socketWrite: ByteWriteChannel, parts: Array<ByteBuffer>)
     }
 }
 
-fun log(msg: String) {
+private fun log(msg: String) {
     AsyncLogger.log(msg)
 }
