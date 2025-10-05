@@ -9,13 +9,11 @@ import mqtt.parser.publish.properties.PublishPropertiesParser
 internal object PublishPacketParser {
     fun parsePublishPacket(buffer: MQTTByteBuffer): PublishPacket {
         // TODO: Get dup, qos and retain :/
-        val size = buffer.remaining()
         // ------ Variable header ------
         val topicName = Topic(buffer.getEncodedString())
         val packetIdentifier = 0
         // TODO: Use QoS that conditionally sets this
         //  val packetIdentifier = buffer.getTwoByteInt()
-        val size2 = buffer.remaining()
 
         // ------ Properties ------
         val publishPropertyLength = buffer.getVariableByteInteger()

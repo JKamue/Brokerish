@@ -80,9 +80,11 @@ class MqttServer(scope: CoroutineScope) {
                     return
                 } else {
                     val sharedReleaseAction = payloadManager.getSharedReleaseAction(subscriptions.size)
-                    // TODO: Create message and blast it
+                    val message = OutgoingMessage(packet, sharedReleaseAction)
+                    subscriptions.forEach {
+                        clients[it.second]?.sendChannel?.send(message) ?: sharedReleaseAction.invoke()
+                    }
                 }
-                print("test")
             }
 
             else -> {

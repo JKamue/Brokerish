@@ -11,6 +11,7 @@ object PacketEncoder {
             is PingrespPacket -> PingrespEncoder.encodeScatter(packet)
             is DisconnectPacket -> DisconnectEncoder.encodeScatter(packet)
             is SubackPacket -> SubackEncoder.encodeScatter(packet)
+            is PublishPacket -> PublishEncoder.encodeScatter(packet)
             else -> throw NotImplementedError("Packet not implemented yet")
         }
     }
