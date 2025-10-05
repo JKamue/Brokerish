@@ -7,25 +7,26 @@ import de.jkamue.mqtt.valueobject.ClientId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 class MqttServer(scope: CoroutineScope) {
     val commandChannel = Channel<ServerCommand>(Channel.UNLIMITED)
-    private val clients = ConcurrentHashMap<ClientId, SendChannel<OutgoingMessage>>()
+    private val clients = ConcurrentHashMap<ClientId, Client>()
 
     init {
         scope.launch(Dispatchers.Default) {
             for (command in commandChannel) {
                 when (command) {
                     is ClientConnected -> {
+                        val client = Client(command.clientId, command.outgoing)
                         val disconnectMsg = OutgoingMessage(DisconnectPacket(DisconnectReasonCode.SESSION_TAKEN_OVER))
-                        clients[command.clientId]?.send(disconnectMsg)
-                        clients[command.clientId] = command.outgoing
+                        clients[command.clientId]?.sendChannel?.send(disconnectMsg)
+                        clients[command.clientId] = client
                     }
 
                     is ClientDisconnected -> {
+                        clients[command.clientId]?.let { SubscriptionHandler.removeSubscriptionsFor(it) }
                         clients.remove(command.clientId)
                         // TODO: Publish Will message by sending to other client channels
                     }
@@ -40,7 +41,7 @@ class MqttServer(scope: CoroutineScope) {
 
     private suspend fun handlePacket(command: PacketReceived) {
         val (clientId, packet, payloadManager) = command
-        val outgoing = clients[clientId] ?: run {
+        val client = clients[clientId] ?: run {
             // If client is not found, we must release the payload
             payloadManager.getReleaseAction()()
             return
@@ -53,16 +54,22 @@ class MqttServer(scope: CoroutineScope) {
                     connectReasonCode = ConnectReasonCode.SUCCESS
                 )
                 payloadManager.getReleaseAction().invoke()
-                outgoing.send(OutgoingMessage(response))
+                client.sendChannel.send(OutgoingMessage(response))
             }
 
             is PingreqPacket -> {
                 payloadManager.getReleaseAction().invoke()
-                outgoing.send(OutgoingMessage(PingrespPacket))
+                client.sendChannel.send(OutgoingMessage(PingrespPacket))
             }
 
             is SubscribePacket -> {
+                val response = SubackPacket(
+                    packetIdentifier = packet.packetIdentifier,
+                    reasonCodes = packet.subscriptions.map { SubackReasonCode.GRANTED_QOS_0 }
+                )
+                client.sendChannel.send(OutgoingMessage(response))
                 payloadManager.getReleaseAction().invoke()
+                packet.subscriptions.forEach { SubscriptionHandler.addSubscription(it, clientId) }
             }
 
             else -> {

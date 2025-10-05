@@ -1,9 +1,6 @@
 package mqtt.encoder
 
-import de.jkamue.mqtt.packet.ConnackPacket
-import de.jkamue.mqtt.packet.DisconnectPacket
-import de.jkamue.mqtt.packet.Packet
-import de.jkamue.mqtt.packet.PingrespPacket
+import de.jkamue.mqtt.packet.*
 import mqtt.encoder.connack.ConnackEncoder
 import java.nio.ByteBuffer
 
@@ -13,6 +10,7 @@ object PacketEncoder {
             is ConnackPacket -> ConnackEncoder.encodeScatter(packet)
             is PingrespPacket -> PingrespEncoder.encodeScatter(packet)
             is DisconnectPacket -> DisconnectEncoder.encodeScatter(packet)
+            is SubackPacket -> SubackEncoder.encodeScatter(packet)
             else -> throw NotImplementedError("Packet not implemented yet")
         }
     }

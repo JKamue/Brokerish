@@ -1,8 +1,10 @@
 package mqtt.encoder
 
+import java.nio.ByteBuffer
+
 internal object MqttEncoderHelpers {
 
-    fun encodeVariableByteIntegerToBuffer(value: Int, buffer: java.nio.ByteBuffer) {
+    fun encodeVariableByteIntegerToBuffer(value: Int, buffer: ByteBuffer) {
         var v = value
         do {
             var encoded = (v % 128)
@@ -10,6 +12,11 @@ internal object MqttEncoderHelpers {
             if (v > 0) encoded = encoded or 0x80
             buffer.put(encoded.toByte())
         } while (v > 0)
+    }
+
+    fun encodeTwoByteInt(int: Int, buffer: ByteBuffer) {
+        buffer.put(intToByte(int ushr 8))
+        buffer.put(intToByte(int))
     }
 
     // encode two-byte length prefixed UTF-8 string
@@ -31,5 +38,9 @@ internal object MqttEncoderHelpers {
             count++
         } while (v > 0)
         return count
+    }
+
+    fun intToByte(value: Int): Byte {
+        return (value and 0xFF).toByte()
     }
 }
