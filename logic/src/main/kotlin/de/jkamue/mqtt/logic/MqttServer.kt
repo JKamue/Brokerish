@@ -61,6 +61,10 @@ class MqttServer(scope: CoroutineScope) {
                 outgoing.send(OutgoingMessage(PingrespPacket))
             }
 
+            is SubscribePacket -> {
+                payloadManager.getReleaseAction().invoke()
+            }
+
             else -> {
                 // For any other packet type, we don't know what to do, so just release the resource.
                 payloadManager.getReleaseAction().invoke()
