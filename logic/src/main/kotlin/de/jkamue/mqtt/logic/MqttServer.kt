@@ -72,6 +72,19 @@ class MqttServer(scope: CoroutineScope) {
                 packet.subscriptions.forEach { SubscriptionHandler.addSubscription(it, clientId) }
             }
 
+            is PublishPacket -> {
+                val subscriptions = SubscriptionHandler.findSubscriptionsForTopic(packet.topic)
+
+                if (subscriptions.isEmpty()) {
+                    payloadManager.getReleaseAction().invoke()
+                    return
+                } else {
+                    val sharedReleaseAction = payloadManager.getSharedReleaseAction(subscriptions.size)
+                    // TODO: Create message and blast it
+                }
+                print("test")
+            }
+
             else -> {
                 // For any other packet type, we don't know what to do, so just release the resource.
                 payloadManager.getReleaseAction().invoke()

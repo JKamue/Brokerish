@@ -2,6 +2,7 @@ package de.jkamue.mqtt.logic
 
 import de.jkamue.mqtt.valueobject.ClientId
 import de.jkamue.mqtt.valueobject.Subscription
+import de.jkamue.mqtt.valueobject.Topic
 import java.util.concurrent.CopyOnWriteArrayList
 
 object SubscriptionHandler {
@@ -15,5 +16,10 @@ object SubscriptionHandler {
         for (subscription in client.subscriptions.value) {
             list.removeIf { it.second == client.id }
         }
+    }
+
+    fun findSubscriptionsForTopic(topic: Topic): List<Pair<Subscription, ClientId>> {
+        return list
+            .filter { it.first.topicFilter.topicFilter == topic.topic }
     }
 }

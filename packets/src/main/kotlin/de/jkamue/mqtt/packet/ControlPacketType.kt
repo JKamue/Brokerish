@@ -14,8 +14,9 @@ enum class ControlPacketType(val value: Int) {
         override fun flagsAreValid(flags: Int) = validateFlag(0b0000, flags)
     },
     PUBLISH(3) {
-        override fun flagsAreValid(flags: Int) =
-            throw NotImplementedError("Exception for PUBLISH as specified in Table 2-2 not done yet")
+        override fun flagsAreValid(flags: Int) = true
+        // TODO
+        // throw NotImplementedError("Exception for PUBLISH as specified in Table 2-2 not done yet")
     },
     PUBACK(4) {
         override fun flagsAreValid(flags: Int) = validateFlag(0b0000, flags)
