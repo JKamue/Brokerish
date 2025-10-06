@@ -20,6 +20,6 @@ object SubscriptionHandler {
 
     fun findSubscriptionsForTopic(topic: Topic): List<Pair<Subscription, ClientId>> {
         return list
-            .filter { it.first.topicFilter.topicFilter == topic.topic }
+            .filter { it.first.topicFilter.value == topic.value }
     }
 }

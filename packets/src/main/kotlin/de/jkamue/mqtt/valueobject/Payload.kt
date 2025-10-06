@@ -1,6 +1,6 @@
 package de.jkamue.mqtt.valueobject
 
-import java.nio.CharBuffer
+import java.nio.ByteBuffer
 
 @JvmInline
-value class Payload(val payload: CharBuffer)
+value class Payload(val payload: ByteBuffer)

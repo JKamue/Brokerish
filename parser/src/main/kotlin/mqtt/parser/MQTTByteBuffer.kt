@@ -57,7 +57,11 @@ internal value class MQTTByteBuffer(val buffer: ByteBuffer) {
     fun getEncodedString(): String {
         val length = getTwoByteInt()
         if (length == 0) return ""
-        val byteSlice = getNextBytes(length)
+        return getString(length)
+    }
+
+    fun getString(length: Int? = null): String {
+        val byteSlice = getNextBytes(length ?: buffer.remaining())
         return decoderThreadLocal.get().decode(byteSlice).toString()
     }
 

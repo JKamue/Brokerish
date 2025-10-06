@@ -52,7 +52,7 @@ internal object WillPropertyParser {
                 },
                 WillPropertyIdentifier.RESPONSE_TOPIC.identifier to { buffer, builder ->
                     builder.responseTopic = builder.responseTopic.setOnce(
-                        Topic(buffer.getEncodedString())
+                        Topic(buffer.getBinaryData())
                     ) { "responseTopic" }
                 },
                 WillPropertyIdentifier.CORRELATION_DATA.identifier to { buffer, builder ->

@@ -3,6 +3,7 @@ package mqtt.parser.subscribe
 import de.jkamue.mqtt.packet.SubscribePacket
 import de.jkamue.mqtt.valueobject.*
 import mqtt.parser.MQTTByteBuffer
+import mqtt.parser.createCopy
 import mqtt.parser.subscribe.properties.SubscribePropertiesParser
 
 internal object SubscribePacketParser {
@@ -17,7 +18,8 @@ internal object SubscribePacketParser {
         // Payload
         val subscriptions = mutableListOf<Subscription>()
         while (buffer.remaining() > 0) {
-            val topicFilter = TopicFilter(buffer.getEncodedString())
+            // Topic Filter of subscription is kept in memory for long times
+            val topicFilter = TopicFilter(buffer.getBinaryData().createCopy())
             val optionsByte = buffer.getUnsignedByte()
             val options = parseSubscriptionOptions(optionsByte)
             subscriptions.add(Subscription(topicFilter, options))

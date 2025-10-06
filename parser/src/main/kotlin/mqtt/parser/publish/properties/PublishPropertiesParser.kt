@@ -51,12 +51,12 @@ internal object PublishPropertiesParser {
                 },
                 PublishPropertyIdentifier.RESPONSE_TOPIC.identifier to { buffer, builder ->
                     builder.responseTopic = builder.responseTopic.setOnce(
-                        Topic(buffer.getEncodedString())
+                        Topic(buffer.getBinaryData())
                     ) { "responseTopic" }
                 },
                 PublishPropertyIdentifier.RESPONSE_TOPIC.identifier to { buffer, builder ->
                     builder.responseTopic = builder.responseTopic.setOnce(
-                        Topic(buffer.getEncodedString())
+                        Topic(buffer.getBinaryData())
                     ) { "responseTopic" }
                 },
                 PublishPropertyIdentifier.CORRELATION_DATA.identifier to { buffer, builder ->
