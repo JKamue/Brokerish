@@ -11,18 +11,17 @@ object PublishEncoder {
         val topicName = packet.topic.value
         val payload = packet.payload.duplicate().rewind()
 
-        val packetLength =
-            1 + // header
-                    1 + // length
-                    2 + // topic name length
-                    topicName.remaining() + // topic name
-                    // Qos 0 -> no identifier 2 + // packet identifier
-                    1 + // property length (0)
-                    payload.remaining() // payload length
+        val contentLength = 2 + // topic name length
+                topicName.remaining() + // topic name
+                // Qos 0 -> no identifier 2 + // packet identifier
+                1 + // property length (0)
+                payload.remaining() // payload length
+        val lengthAfterHeader = MqttEncoderHelpers.variableByteIntegerLength(contentLength)
 
-        val buffer = ByteBuffer.allocate(4) // 1 header + 1 length + 2 topic length name
+        val buffer =
+            ByteBuffer.allocate(1 + lengthAfterHeader + 2) // 1 header + lengthAfterHeader + 2 topic length name
         buffer.put(0b00110000.toByte()) // control packet type + fixed dup / qos / retain
-        MqttEncoderHelpers.encodeVariableByteIntegerToBuffer(packetLength - 2, buffer)
+        MqttEncoderHelpers.encodeVariableByteIntegerToBuffer(contentLength, buffer)
         MqttEncoderHelpers.encodeTwoByteInt(topicName.remaining(), buffer)
 
         buffer.flip()

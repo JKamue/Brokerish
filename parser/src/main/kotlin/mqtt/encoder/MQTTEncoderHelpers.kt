@@ -14,6 +14,16 @@ internal object MqttEncoderHelpers {
         } while (v > 0)
     }
 
+    fun variableByteIntegerLength(value: Int): Int {
+        var v = value
+        var count = 1
+        while (v >= 128) {
+            v /= 128
+            count++
+        }
+        return count
+    }
+
     fun encodeTwoByteInt(int: Int, buffer: ByteBuffer) {
         buffer.put(intToByte(int ushr 8))
         buffer.put(intToByte(int))
