@@ -8,8 +8,8 @@ object PublishEncoder {
     val ZERO_BUFFER = ByteBuffer.wrap(byteArrayOf(0)).asReadOnlyBuffer()
 
     fun encodeScatter(packet: PublishPacket): Array<ByteBuffer> {
-        val topicName = packet.topic.value
-        val payload = packet.payload.duplicate().rewind()
+        val topicName = packet.topic.value.duplicate().rewind().asReadOnlyBuffer()
+        val payload = packet.payload.duplicate().rewind().asReadOnlyBuffer()
 
         val contentLength = 2 + // topic name length
                 topicName.remaining() + // topic name
@@ -32,7 +32,7 @@ object PublishEncoder {
             buffer,
             topicName,
             // Qos 0 -> no identifier but in the future MqttEncoderHelpers.encodeTwoByteInt(packet.packetIdentifier, buffer)
-            ZERO_BUFFER,
+            ZERO_BUFFER.duplicate().rewind().asReadOnlyBuffer(),
             payload
         )
     }
