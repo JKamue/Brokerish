@@ -2,6 +2,8 @@ package de.jkamue.mqtt.logic
 
 import de.jkamue.mqtt.ConnectReasonCode
 import de.jkamue.mqtt.DisconnectReasonCode
+import de.jkamue.mqtt.logic.subscriptions.SubscriptionTree
+import de.jkamue.mqtt.logic.subscriptions.SubscriptionWithClient
 import de.jkamue.mqtt.packet.*
 import de.jkamue.mqtt.valueobject.ClientId
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +28,8 @@ class MqttServer(scope: CoroutineScope) {
                     }
 
                     is ClientDisconnected -> {
-                        clients[command.clientId]?.let { SubscriptionHandler.removeSubscriptionsFor(it) }
+                        SubscriptionTree.removeSubscriptionsFor(command.clientId)
+                        println(SubscriptionTree)
                         clients.remove(command.clientId)
                         // TODO: Publish Will message by sending to other client channels
                     }
@@ -69,12 +72,16 @@ class MqttServer(scope: CoroutineScope) {
                 )
                 client.sendChannel.send(OutgoingMessage(response))
                 payloadManager.getReleaseAction().invoke()
-                packet.subscriptions.forEach { SubscriptionHandler.addSubscription(it, clientId) }
+                packet.subscriptions.forEach {
+                    SubscriptionTree.addSubscription(
+                        SubscriptionWithClient(it, clientId)
+                    )
+                }
+                println(SubscriptionTree)
             }
 
             is PublishPacket -> {
-                val subscriptions = SubscriptionHandler.findSubscriptionsForTopic(packet.topic)
-
+                val subscriptions = SubscriptionTree.getClientsInterestedIn(packet.topic)
                 if (subscriptions.isEmpty()) {
                     payloadManager.getReleaseAction().invoke()
                     return
@@ -82,7 +89,7 @@ class MqttServer(scope: CoroutineScope) {
                     val sharedReleaseAction = payloadManager.getSharedReleaseAction(subscriptions.size)
                     val message = OutgoingMessage(packet, sharedReleaseAction)
                     subscriptions.forEach {
-                        clients[it.second]?.sendChannel?.send(message) ?: sharedReleaseAction.invoke()
+                        clients[it]?.sendChannel?.send(message) ?: sharedReleaseAction.invoke()
                     }
                 }
             }
