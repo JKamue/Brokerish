@@ -15,12 +15,23 @@ class SubscriptionTreeNode {
     private val children = ConcurrentHashMap<ByteBuffer, SubscriptionTreeNode>()
     private val subscriptions = CopyOnWriteArraySet<SubscriptionWithClient>()
 
+    companion object {
+        private val PLUS_WILDCARD: ByteBuffer =
+            ByteBuffer.wrap(byteArrayOf('+'.code.toByte())).asReadOnlyBuffer()
+    }
+
     fun getClientsInterestedIn(remainingPath: Topic?): List<ClientId> {
         return if (remainingPath == null) {
             subscriptions.map { it.clientId }
         } else {
             val childName = remainingPath.firstSegment
-            children.get(childName)?.getClientsInterestedIn(remainingPath.remainingSegments) ?: emptyList()
+            val directSubscriptions =
+                children.get(childName)?.getClientsInterestedIn(remainingPath.remainingSegments) ?: emptyList()
+
+            val wildcardSubscriptions =
+                children.get(PLUS_WILDCARD)?.getClientsInterestedIn(remainingPath.remainingSegments)
+                    ?: emptyList()
+            return directSubscriptions + wildcardSubscriptions
         }
     }
 
