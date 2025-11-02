@@ -20,16 +20,16 @@ class SubscriptionTreeNode {
             ByteBuffer.wrap(byteArrayOf('+'.code.toByte())).asReadOnlyBuffer()
     }
 
-    fun getClientsInterestedIn(remainingPath: Topic?): List<ClientId> {
+    fun getSubscriptionsForTopic(remainingPath: Topic?): List<SubscriptionWithClient> {
         return if (remainingPath == null) {
-            subscriptions.map { it.clientId }
+            subscriptions.map { it }
         } else {
             val childName = remainingPath.firstSegment
             val directSubscriptions =
-                children.get(childName)?.getClientsInterestedIn(remainingPath.remainingSegments) ?: emptyList()
+                children.get(childName)?.getSubscriptionsForTopic(remainingPath.remainingSegments) ?: emptyList()
 
             val wildcardSubscriptions =
-                children.get(PLUS_WILDCARD)?.getClientsInterestedIn(remainingPath.remainingSegments)
+                children.get(PLUS_WILDCARD)?.getSubscriptionsForTopic(remainingPath.remainingSegments)
                     ?: emptyList()
             return directSubscriptions + wildcardSubscriptions
         }

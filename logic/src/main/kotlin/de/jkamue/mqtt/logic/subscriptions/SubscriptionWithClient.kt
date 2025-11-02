@@ -5,5 +5,6 @@ import de.jkamue.mqtt.valueobject.Subscription
 
 data class SubscriptionWithClient(
     val subscription: Subscription,
+    val subscriptionIdentifier: Int?,
     val clientId: ClientId,
 )

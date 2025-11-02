@@ -21,8 +21,8 @@ object SubscriptionTree {
         subscriptions.get(clientId)?.forEach { root.removeSubscription(clientId, it) }
     }
 
-    fun getClientsInterestedIn(topic: Topic): List<ClientId> {
-        return root.getClientsInterestedIn(topic)
+    fun getSubscriptionsForTopic(topic: Topic): List<SubscriptionWithClient> {
+        return root.getSubscriptionsForTopic(topic)
     }
 
     override fun toString(): String {

@@ -74,22 +74,27 @@ class MqttServer(scope: CoroutineScope) {
                 payloadManager.getReleaseAction().invoke()
                 packet.subscriptions.forEach {
                     SubscriptionTree.addSubscription(
-                        SubscriptionWithClient(it, clientId)
+                        SubscriptionWithClient(it, packet.subscriptionIdentifier, clientId)
                     )
                 }
                 println(SubscriptionTree)
             }
 
             is PublishPacket -> {
-                val subscriptions = SubscriptionTree.getClientsInterestedIn(packet.topic)
+                val subscriptions = SubscriptionTree.getSubscriptionsForTopic(packet.topic)
                 if (subscriptions.isEmpty()) {
                     payloadManager.getReleaseAction().invoke()
                     return
                 } else {
                     val sharedReleaseAction = payloadManager.getSharedReleaseAction(subscriptions.size)
-                    val message = OutgoingMessage(packet, sharedReleaseAction)
                     subscriptions.forEach {
-                        clients[it]?.sendChannel?.send(message) ?: sharedReleaseAction.invoke()
+                        val packetToSend = if (it.subscriptionIdentifier != null) {
+                            packet.copy(properties = packet.properties.copy(subscriptionIdentifier = it.subscriptionIdentifier))
+                        } else {
+                            packet
+                        }
+                        val message = OutgoingMessage(packetToSend, sharedReleaseAction)
+                        clients[it.clientId]?.sendChannel?.send(message) ?: sharedReleaseAction.invoke()
                     }
                 }
             }
