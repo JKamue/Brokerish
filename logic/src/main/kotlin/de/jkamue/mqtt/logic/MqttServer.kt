@@ -6,13 +6,14 @@ import de.jkamue.mqtt.logic.subscriptions.SubscriptionTree
 import de.jkamue.mqtt.logic.subscriptions.SubscriptionWithClient
 import de.jkamue.mqtt.packet.*
 import de.jkamue.mqtt.valueobject.ClientId
+import de.jkamue.mqtt.valueobject.QualityOfService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
-class MqttServer(scope: CoroutineScope) {
+class MqttServer(scope: CoroutineScope, val config: MqttServerConfig) {
     val commandChannel = Channel<ServerCommand>(Channel.UNLIMITED)
     private val clients = ConcurrentHashMap<ClientId, Client>()
 
@@ -54,7 +55,8 @@ class MqttServer(scope: CoroutineScope) {
             is ConnectPacket -> {
                 val response = ConnackPacket(
                     sessionPresent = false, // TODO: session handling
-                    connectReasonCode = ConnectReasonCode.SUCCESS
+                    connectReasonCode = ConnectReasonCode.SUCCESS,
+                    maximumQualityOfService = config.maximumQualityOfService
                 )
                 payloadManager.getReleaseAction().invoke()
                 client.sendChannel.send(OutgoingMessage(response))
@@ -68,7 +70,13 @@ class MqttServer(scope: CoroutineScope) {
             is SubscribePacket -> {
                 val response = SubackPacket(
                     packetIdentifier = packet.packetIdentifier,
-                    reasonCodes = packet.subscriptions.map { SubackReasonCode.GRANTED_QOS_0 }
+                    reasonCodes = packet.subscriptions.map { requestedSubscription ->
+                        val chosenQoS = minOf(
+                            config.maximumQualityOfService.number,
+                            requestedSubscription.options.qualityOfService.number
+                        ).let { QualityOfService.fromInt(it) }
+                        SubackReasonCode.fromQoS(chosenQoS)
+                    }
                 )
                 client.sendChannel.send(OutgoingMessage(response))
                 payloadManager.getReleaseAction().invoke()
@@ -77,7 +85,6 @@ class MqttServer(scope: CoroutineScope) {
                         SubscriptionWithClient(it, packet.subscriptionIdentifier, clientId)
                     )
                 }
-                println(SubscriptionTree)
             }
 
             is PublishPacket -> {

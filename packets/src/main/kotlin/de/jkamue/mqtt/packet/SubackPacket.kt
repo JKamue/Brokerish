@@ -1,5 +1,7 @@
 package de.jkamue.mqtt.packet
 
+import de.jkamue.mqtt.valueobject.QualityOfService
+
 class SubackPacket(
     val packetIdentifier: Int,
     // reasonString: String?,
@@ -28,5 +30,13 @@ enum class SubackReasonCode(val value: Int) {
     companion object {
         fun fromValue(value: Int): SubackReasonCode? =
             entries.find { it.value == value }
+
+        fun fromQoS(qualityOfService: QualityOfService) =
+            when (qualityOfService) {
+                QualityOfService.AT_MOST_ONCE_DELIVERY -> GRANTED_QOS_0
+                QualityOfService.AT_LEAST_ONCE_DELIVERY -> GRANTED_QOS_1
+                QualityOfService.EXACTLY_ONCE_DELIVERY -> GRANTED_QOS_2
+            }
+        
     }
 }

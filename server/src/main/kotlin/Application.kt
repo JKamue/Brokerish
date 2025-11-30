@@ -1,5 +1,6 @@
 package de.jkamue
 
+import BrokerishConfig
 import BufferPool
 import ReferenceCountedRelease
 import de.jkamue.mqtt.MalformedPacketMqttException
@@ -11,6 +12,7 @@ import de.jkamue.mqtt.packet.Packet
 import de.jkamue.mqtt.valueobject.ClientId
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
+import io.ktor.server.config.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -29,12 +31,15 @@ private class BufferPayloadManager(private val buffer: ByteBuffer) : PayloadMana
 }
 
 fun main() {
+    val config = ApplicationConfig("application.yaml")
+    val brokerishConfig = BrokerishConfig.create(config)
+
     runBlocking {
         val selectorManager = ActorSelectorManager(Dispatchers.IO)
         val serverJob = SupervisorJob()
         val serverScope = CoroutineScope(Dispatchers.IO + serverJob)
 
-        val mqttServer = MqttServer(serverScope)
+        val mqttServer = MqttServer(serverScope, brokerishConfig)
 
         aSocket(selectorManager).tcp().bind("127.0.0.1", 9002).use { serverSocket ->
             log("MQTT-listening server is running at ${serverSocket.localAddress}")

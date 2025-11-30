@@ -2,7 +2,7 @@ package de.jkamue.mqtt.valueobject
 
 import de.jkamue.mqtt.MalformedPacketMqttException
 
-enum class QualityOfService(number: Int) {
+enum class QualityOfService(val number: Int) {
     // Values specified in section 4.3
     AT_MOST_ONCE_DELIVERY(0),
     AT_LEAST_ONCE_DELIVERY(1),
