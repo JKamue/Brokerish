@@ -4,13 +4,15 @@ import io.ktor.server.config.*
 
 @kotlinx.serialization.Serializable
 data class BrokerishConfig(
-    override val maximumQualityOfService: QualityOfService
+    override val maximumQualityOfService: QualityOfService,
+    val keepAliveTimeoutMultiplier: Double
 ) : MqttServerConfig {
     companion object {
         fun create(config: ApplicationConfig): BrokerishConfig {
             val brokerishConfig = config.config("brokerish")
             return BrokerishConfig(
-                maximumQualityOfService = brokerishConfig.property("maximumQualityOfService").getAs()
+                maximumQualityOfService = brokerishConfig.property("maximumQualityOfService").getAs(),
+                keepAliveTimeoutMultiplier = brokerishConfig.property("keepAliveTimeoutMultiplier").getAs()
             )
         }
     }

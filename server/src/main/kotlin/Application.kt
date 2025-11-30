@@ -3,6 +3,8 @@ package de.jkamue
 import BrokerishConfig
 import BufferPool
 import ReferenceCountedRelease
+import de.jkamue.mqtt.DisconnectReasonCode
+import de.jkamue.mqtt.KeepAliveTimeoutMqttException
 import de.jkamue.mqtt.MalformedPacketMqttException
 import de.jkamue.mqtt.logic.*
 import de.jkamue.mqtt.packet.ConnectPacket
@@ -46,9 +48,10 @@ fun main() {
 
             while (true) {
                 val socket = serverSocket.accept()
+                val remoteAddress = socket.remoteAddress
 
                 serverScope.launch {
-                    log("Accepted connection from ${socket.remoteAddress}")
+                    log("Accepted connection from $remoteAddress")
                     val readChannel = socket.openReadChannel()
                     val writeChannel = socket.openWriteChannel(autoFlush = false)
                     val outgoingPackets = Channel<OutgoingMessage>(Channel.BUFFERED)
@@ -68,8 +71,8 @@ fun main() {
                         val leasedBuffer = packetAndBuffer.second
                         buffer = leasedBuffer
                         clientId = firstPacket.clientId
-                        val keepAlive = (firstPacket.keepAlive.duration + 2).seconds
-
+                        val keepAlive =
+                            (firstPacket.keepAlive.duration * brokerishConfig.keepAliveTimeoutMultiplier).seconds
 
                         val payloadManager = BufferPayloadManager(leasedBuffer)
                         mqttServer.commandChannel.send(ClientConnected(clientId, outgoingPackets))
@@ -92,26 +95,39 @@ fun main() {
                         }
 
                         // Reader coroutine
-                        while (socket.isActive) {
-                            val packetAndBuffer = withTimeoutOrNull(keepAlive) {
-                                readMqttPacket(readChannel)
-                            } ?: break // Connection closed
+                        try {
+                            while (socket.isActive) {
+                                val packetAndBuffer = withTimeoutOrNull(keepAlive) {
+                                    readMqttPacket(readChannel)
+                                } ?: throw KeepAliveTimeoutMqttException("")
 
-                            val subsequentPayloadManager = BufferPayloadManager(packetAndBuffer.second)
-                            mqttServer.commandChannel.send(
-                                PacketReceived(
-                                    clientId,
-                                    packetAndBuffer.first,
-                                    subsequentPayloadManager
+                                val subsequentPayloadManager = BufferPayloadManager(packetAndBuffer.second)
+                                mqttServer.commandChannel.send(
+                                    PacketReceived(
+                                        clientId,
+                                        packetAndBuffer.first,
+                                        subsequentPayloadManager
+                                    )
                                 )
-                            )
+                            }
+                        } catch (_: KeepAliveTimeoutMqttException) {
+                            log("No packet received within keepalive $keepAlive including tolerance for $remoteAddress")
+                            clientId.let {
+                                mqttServer.commandChannel.send(
+                                    DisconnectClient(
+                                        it,
+                                        DisconnectReasonCode.KEEP_ALIVE_TIMEOUT
+                                    )
+                                )
+                            }
+                            delay(1000)
                         }
-
                     } catch (e: Exception) {
-                        log("Error in client coroutine for ${socket.remoteAddress}: ${e.message}")
-                    } finally {
-                        log("Closing connection for ${socket.remoteAddress}")
+                        log("Error in client coroutine for $remoteAddress: ${e.message}")
                         clientId?.let { mqttServer.commandChannel.send(ClientDisconnected(it)) }
+                        delay(1000)
+                    } finally {
+                        log("Closing connection for $remoteAddress")
                         outgoingPackets.close()
                         socket.close()
                         buffer?.let { BufferPool.release(it) }

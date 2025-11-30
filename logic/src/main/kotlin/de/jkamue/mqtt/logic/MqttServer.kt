@@ -24,7 +24,7 @@ class MqttServer(scope: CoroutineScope, val config: MqttServerConfig) {
                     is ClientConnected -> {
                         val client = Client(command.clientId, command.outgoing)
                         val disconnectMsg = OutgoingMessage(DisconnectPacket(DisconnectReasonCode.SESSION_TAKEN_OVER))
-                        clients[command.clientId]?.sendChannel?.send(disconnectMsg)
+                        clients[command.clientId]?.sendChannel?.trySend(disconnectMsg)
                         clients[command.clientId] = client
                     }
 
@@ -33,6 +33,11 @@ class MqttServer(scope: CoroutineScope, val config: MqttServerConfig) {
                         println(SubscriptionTree)
                         clients.remove(command.clientId)
                         // TODO: Publish Will message by sending to other client channels
+                    }
+
+                    is DisconnectClient -> {
+                        val disconnectMsg = OutgoingMessage(DisconnectPacket(command.reasonCode))
+                        clients[command.clientId]?.sendChannel?.send(disconnectMsg)
                     }
 
                     is PacketReceived -> {
